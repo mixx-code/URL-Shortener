@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { User, Settings, BarChart3, LogOut, ArrowLeft, Link2 } from 'lucide-react';
 
 interface HeaderProps {
   title: string;
@@ -23,6 +24,59 @@ export default function Header({
 }: HeaderProps) {
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [user, setUser] = useState<{ name: string; username: string; email: string } | null>(null);
+
+  // Load user data from API on component mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (token) {
+          const response = await fetch('http://localhost:3000/api/profile', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.status && data.user) {
+              setUser(data.user);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // Function to generate avatar background color based on username
+  const getAvatarColor = (username: string) => {
+    if (!username) return 'from-gray-400 to-gray-600';
+    
+    const colors = [
+      'from-red-400 to-red-600',
+      'from-blue-400 to-blue-600',
+      'from-green-400 to-green-600',
+      'from-yellow-400 to-yellow-600',
+      'from-purple-400 to-purple-600',
+      'from-pink-400 to-pink-600',
+      'from-indigo-400 to-indigo-600',
+      'from-teal-400 to-teal-600',
+      'from-orange-400 to-orange-600',
+      'from-cyan-400 to-cyan-600'
+    ];
+    
+    // Generate index based on first character of username
+    const charCode = username.charCodeAt(0);
+    const colorIndex = charCode % colors.length;
+    
+    return colors[colorIndex];
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -53,9 +107,7 @@ export default function Header({
                 className="mr-2 sm:mr-4 p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-all duration-200 flex-shrink-0"
                 title="Back to Dashboard"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
+                <ArrowLeft className="w-5 h-5" />
               </button>
             )}
             
@@ -90,13 +142,11 @@ export default function Header({
             <div className="relative">
               <button
                 onClick={toggleDropdown}
-                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full hover:from-blue-600 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className={`flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br ${getAvatarColor(user?.username || '')} rounded-full hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl transform focus:outline-none focus:ring-2 focus:ring-offset-2`}
                 aria-label="User menu"
                 aria-expanded={dropdownOpen}
               >
-                <svg className="w-5 h-5 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
+                <User className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </button>
               
               {/* Dropdown Menu */}
@@ -113,14 +163,12 @@ export default function Header({
                       {/* User Info */}
                       <div className="px-4 py-3 border-b border-gray-100">
                         <div className="flex items-center">
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center">
-                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
+                          <div className={`w-8 h-8 bg-gradient-to-br ${getAvatarColor(user?.username || '')} rounded-full flex items-center justify-center`}>
+                            <User className="w-4 h-4 text-white" />
                           </div>
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-900">User</p>
-                            <p className="text-xs text-gray-500">Account</p>
+                            <p className="text-sm font-medium text-gray-900">{user?.name || user?.username || 'User'}</p>
+                            <p className="text-xs text-gray-500">{user?.email || 'Account'}</p>
                           </div>
                         </div>
                       </div>
@@ -131,9 +179,7 @@ export default function Header({
                         onClick={closeDropdown}
                         className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors group"
                       >
-                        <svg className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
+                        <User className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-600 transition-colors" />
                         <span className="font-medium">Profile</span>
                       </Link>
                       
@@ -142,9 +188,7 @@ export default function Header({
                         onClick={closeDropdown}
                         className="flex items-center px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors group"
                       >
-                        <svg className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2v-8a2 2 0 00-2-2H9a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
+                        <BarChart3 className="w-5 h-5 mr-3 text-gray-400 group-hover:text-blue-600 transition-colors" />
                         <span className="font-medium">Analytics</span>
                       </Link>
                       
@@ -154,9 +198,7 @@ export default function Header({
                         onClick={handleLogout}
                         className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors group"
                       >
-                        <svg className="w-5 h-5 mr-3 text-red-500 group-hover:text-red-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
+                        <LogOut className="w-5 h-5 mr-3 text-red-500 group-hover:text-red-600 transition-colors" />
                         <span className="font-medium">Logout</span>
                       </button>
                     </div>

@@ -46,6 +46,7 @@ export default function RegisterPage() {
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');
       }
+      console.log("data berhasil di simpan :",data);
 
       // Store token and redirect to dashboard
       localStorage.setItem('token', data.token);

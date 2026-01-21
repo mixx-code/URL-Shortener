@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Header from '../components/Header';
+import { MousePointer, Link, BarChart3, TrendingUp, Activity, Globe, Clock } from 'lucide-react';
 
 interface AnalyticsData {
   totalClicks: number;
@@ -170,10 +171,7 @@ const formatMonth = (monthString: string) => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0 bg-blue-100 rounded-lg p-3">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
+                    <MousePointer className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
@@ -187,9 +185,7 @@ const formatMonth = (monthString: string) => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0 bg-green-100 rounded-lg p-3">
-                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2V4a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
-                    </svg>
+                    <Link className="w-6 h-6 text-green-600" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
@@ -203,9 +199,7 @@ const formatMonth = (monthString: string) => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0 bg-purple-100 rounded-lg p-3">
-                    <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                    </svg>
+                    <BarChart3 className="w-6 h-6 text-purple-600" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
@@ -224,9 +218,7 @@ const formatMonth = (monthString: string) => {
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center">
                   <div className="flex-shrink-0 bg-orange-100 rounded-lg p-3">
-                    <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                    <TrendingUp className="w-6 h-6 text-orange-600" />
                   </div>
                   <div className="ml-5 w-0 flex-1">
                     <dl>
@@ -436,9 +428,7 @@ const formatMonth = (monthString: string) => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-8 w-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m9.032 4.026a9.001 9.001 0 01-7.432 0m9.032-4.026A9.001 9.001 0 0112 3c-4.474 0-8.268 3.12-9.032 7.326m9.032 4.026A9.001 9.001 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                              </svg>
+                              <Link className="w-4 h-4 text-blue-600" />
                             </div>
                             <div className="ml-3">
                               <p className="text-sm font-medium text-blue-600">{url.short_url}</p>
@@ -519,7 +509,10 @@ const formatMonth = (monthString: string) => {
                             {click.referer || '-'}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(click.clicked_at).toLocaleString('id-ID')}
+                            <div className="flex items-center">
+                              <Clock className="w-4 h-4 mr-2 text-gray-400" />
+                              {new Date(click.clicked_at).toLocaleString('id-ID')}
+                            </div>
                           </td>
                         </tr>
                       ))}

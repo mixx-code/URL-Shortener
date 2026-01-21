@@ -136,48 +136,8 @@ export default function LandingPage() {
       {/* --- FOOTER --- */}
       <footer className="bg-white border-t border-slate-200 pt-16 pb-8">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 mb-12">
-            <div className="col-span-2 md:col-span-1">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-blue-600 p-1.5 rounded-lg">
-                  <Link2 className="text-white" size={20} />
-                </div>
-                <span className="text-xl font-bold tracking-tight">ShortIT</span>
-              </div>
-              <p className="text-slate-500 text-sm leading-relaxed mb-6">
-                Platform manajemen link terbaik untuk bisnis dan personal. Singkatkan, kelola, dan ukur link Anda.
-              </p>
-              <div className="flex gap-4">
-                <Github className="text-slate-400 hover:text-slate-600 cursor-pointer" size={20} />
-                <Globe className="text-slate-400 hover:text-slate-600 cursor-pointer" size={20} />
-              </div>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-sm uppercase tracking-wider">Produk</h4>
-              <ul className="space-y-2 text-sm text-slate-500">
-                <li><a href="#" className="hover:text-blue-600">URL Shortener</a></li>
-                <li><a href="#" className="hover:text-blue-600">QR Codes</a></li>
-                <li><a href="#" className="hover:text-blue-600">Bio Pages</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-sm uppercase tracking-wider">Perusahaan</h4>
-              <ul className="space-y-2 text-sm text-slate-500">
-                <li><a href="#" className="hover:text-blue-600">Tentang Kami</a></li>
-                <li><a href="#" className="hover:text-blue-600">Karir</a></li>
-                <li><a href="#" className="hover:text-blue-600">Kontak</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-bold mb-4 text-sm uppercase tracking-wider">Legal</h4>
-              <ul className="space-y-2 text-sm text-slate-500">
-                <li><a href="#" className="hover:text-blue-600">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-blue-600">Terms of Service</a></li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-slate-100 pt-8 text-center text-slate-400 text-sm">
-            © {new Date().getFullYear()} ShortIT. Dibuat dengan ❤️ untuk web yang lebih rapi.
+          <div className=" text-center text-slate-400 text-sm">
+            © {new Date().getFullYear()} ShortIT. Dibuat Rizki Febriansyah.
           </div>
         </div>
       </footer>

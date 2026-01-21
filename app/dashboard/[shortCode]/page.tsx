@@ -3,8 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import QRCode from 'qrcode';
 import Header from '../../components/Header';
+import URLDetails from '../../components/organisms/URLDetails';
+import AnalyticsOverview from '../../components/organisms/AnalyticsOverview';
+import QRCodeSection from '../../components/organisms/QRCodeSection';
+import QuickActions from '../../components/organisms/QuickActions';
+import Spinner from '../../components/atoms/Spinner';
+import Alert, { useAlert } from '../../components/Alert';
+import ConfirmationDialog, { useConfirmation } from '../../components/ConfirmationDialog';
 
 interface URLStats {
   id: number;
@@ -33,11 +39,10 @@ export default function URLDetailPage() {
   const [urlStats, setUrlStats] = useState<URLStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [qrCode, setQrCode] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editUrl, setEditUrl] = useState('');
-  const [editShortCode, setEditShortCode] = useState('');
-  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Hooks for alerts and confirmation
+  const { alerts, showAlert, removeAlert } = useAlert();
+  const { confirmation, showConfirmation } = useConfirmation();
 
   // Check authentication on component mount
   useEffect(() => {
@@ -49,29 +54,6 @@ export default function URLDetailPage() {
     fetchURLStats();
   }, [shortCode, router]);
 
-  // Generate QR Code when URL stats are loaded
-  useEffect(() => {
-    if (urlStats?.short_url) {
-      generateQRCode(urlStats.short_url);
-    }
-  }, [urlStats]);
-
-  const generateQRCode = async (shortUrl: string) => {
-    try {
-      const qr = await QRCode.toDataURL(shortUrl, {
-        width: 300,
-        margin: 2,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF',
-        },
-        errorCorrectionLevel: 'H',
-      });
-      setQrCode(qr);
-    } catch (err) {
-      console.error('Error generating QR code:', err);
-    }
-  };
 
   const fetchURLStats = async () => {
     try {
@@ -104,26 +86,25 @@ export default function URLDetailPage() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('Link disalin ke clipboard!');
-  };
-
-  const downloadQR = () => {
-    if (!qrCode) return;
-    
-    const link = document.createElement('a');
-    link.href = qrCode;
-    link.download = `qrcode-${shortCode}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showAlert('success', 'Link berhasil disalin ke clipboard!');
+    } catch (err) {
+      showAlert('error', 'Gagal menyalin link ke clipboard');
+    }
   };
 
   const deleteURL = async () => {
-    if (!confirm('Apakah Anda yakin ingin menghapus URL ini?')) {
-      return;
-    }
+    const confirmed = await showConfirmation({
+      title: 'Hapus URL',
+      message: 'Apakah Anda yakin ingin menghapus URL ini? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      type: 'danger'
+    });
+
+    if (!confirmed) return;
 
     try {
       const token = localStorage.getItem('token');
@@ -139,33 +120,29 @@ export default function URLDetailPage() {
         throw new Error('Failed to delete URL');
       }
 
-      router.push('/dashboard');
+      showAlert('success', 'URL berhasil dihapus!');
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage);
+      showAlert('error', 'Gagal menghapus URL: ' + errorMessage);
     }
   };
 
-  const startEditing = () => {
-    setIsEditing(true);
-    setEditUrl(urlStats?.original_url || '');
-    setEditShortCode(urlStats?.short_code || '');
-  };
+  const updateURL = async (originalUrl: string, shortCode?: string) => {
+    const confirmed = await showConfirmation({
+      title: 'Edit URL',
+      message: 'Apakah Anda yakin ingin menyimpan perubahan pada URL ini?',
+      confirmText: 'Ya, Simpan',
+      cancelText: 'Batal',
+      type: 'warning'
+    });
 
-  const cancelEditing = () => {
-    setIsEditing(false);
-    setEditUrl('');
-    setEditShortCode('');
-  };
-
-  const updateURL = async () => {
-    if (!editUrl.trim()) {
-      setError('URL tidak boleh kosong');
-      return;
-    }
+    if (!confirmed) throw new Error('User cancelled');
 
     try {
-      setIsUpdating(true);
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:3000/api/urls/${urlStats?.id}`, {
         method: 'PUT',
@@ -174,8 +151,8 @@ export default function URLDetailPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          original_url: editUrl.trim(),
-          short_code: editShortCode.trim() || undefined,
+          original_url: originalUrl,
+          short_code: shortCode,
         }),
       });
 
@@ -188,21 +165,17 @@ export default function URLDetailPage() {
       // Update local state with new data
       if (data.status && data.data) {
         setUrlStats(data.data);
-        // Regenerate QR code with new URL
-        if (data.data.short_url) {
-          generateQRCode(data.data.short_url);
-        }
       }
 
-      setIsEditing(false);
-      setEditUrl('');
-      setEditShortCode('');
       setError('');
+      showAlert('success', 'URL berhasil diperbarui!');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
       setError(errorMessage);
-    } finally {
-      setIsUpdating(false);
+      if (errorMessage !== 'User cancelled') {
+        showAlert('error', 'Gagal memperbarui URL: ' + errorMessage);
+      }
+      throw err;
     }
   };
 
@@ -210,7 +183,7 @@ export default function URLDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <Spinner size="lg" className="mx-auto mb-4" />
           <p className="text-gray-600">Memuat detail URL...</p>
         </div>
       </div>
@@ -248,260 +221,58 @@ export default function URLDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* URL Information */}
           <div className="lg:col-span-2 space-y-6">
-            {/* URL Details Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Informasi URL</h2>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Asli</label>
-                  {isEditing ? (
-                    <div className="space-y-3">
-                      <input
-                        type="url"
-                        value={editUrl}
-                        onChange={(e) => setEditUrl(e.target.value)}
-                        placeholder="https://example.com"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
-                        disabled={isUpdating}
-                      />
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Kode Pendek</label>
-                        <input
-                          type="text"
-                          value={editShortCode}
-                          onChange={(e) => setEditShortCode(e.target.value)}
-                          placeholder="custom-code"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black font-mono"
-                          disabled={isUpdating}
-                        />
-                      </div>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={updateURL}
-                          disabled={isUpdating}
-                          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                        >
-                          {isUpdating ? 'Menyimpan...' : 'Simpan'}
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          disabled={isUpdating}
-                          className="bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                        >
-                          Batal
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="bg-gray-50 p-3 rounded-md flex-1">
-                        <p className="text-sm text-gray-900 break-all">{urlStats.original_url}</p>
-                      </div>
-                      <button
-                        onClick={startEditing}
-                        className="ml-3 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md font-medium transition-colors"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">URL Pendek</label>
-                  <div className="flex items-center space-x-2">
-                    <div className="bg-gray-50 p-3 rounded-md flex-1">
-                      <p className="text-sm text-blue-600 font-medium">{urlStats.short_url}</p>
-                    </div>
-                    <button
-                      onClick={() => copyToClipboard(urlStats.short_url)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Salin
-                    </button>
-                    <button
-                      onClick={deleteURL}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
-                    >
-                      Hapus
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Kode Pendek</label>
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-900 font-mono">{urlStats.short_code}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Klik</label>
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-900 font-bold">{urlStats.click_count}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dibuat</label>
-                  <div className="bg-gray-50 p-3 rounded-md">
-                    <p className="text-sm text-gray-900">
-                      {new Date(urlStats.created_at).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <URLDetails
+              urlStats={urlStats}
+              onUpdate={updateURL}
+              onDelete={deleteURL}
+              onCopy={copyToClipboard}
+            />
 
             {/* Analytics Overview */}
             {urlStats.analytics && (
-              <div className="bg-white rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Analytics Overview</h2>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium">Total Klik</p>
-                    <p className="text-2xl font-bold text-blue-900">{urlStats.analytics.total_clicks}</p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-green-600 font-medium">Pengunjung Unik</p>
-                    <p className="text-2xl font-bold text-green-900">{urlStats.analytics.unique_visitors}</p>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium">Rata-rata per Hari</p>
-                    <p className="text-2xl font-bold text-purple-900">
-                      {urlStats.analytics?.daily_clicks && urlStats.analytics.daily_clicks.length > 0 
-                        ? Math.round(urlStats.analytics.total_clicks / urlStats.analytics.daily_clicks.length)
-                        : 0}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Top Countries */}
-                {urlStats.analytics?.top_countries && urlStats.analytics.top_countries.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-md font-medium text-gray-900 mb-3">Negara Teratas</h3>
-                    <div className="space-y-2">
-                      {urlStats.analytics.top_countries.map((country, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{country.country}</span>
-                          <div className="flex items-center space-x-2">
-                            <div className="bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-blue-600 h-2 rounded-full"
-                                style={{ width: `${(country.count / urlStats.analytics!.total_clicks) * 100}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-sm font-medium text-gray-900">{country.count}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Top Devices */}
-                {urlStats.analytics?.top_devices && urlStats.analytics.top_devices.length > 0 && (
-                  <div>
-                    <h3 className="text-md font-medium text-gray-900 mb-3">Perangkat Teratas</h3>
-                    <div className="space-y-2">
-                      {urlStats.analytics.top_devices.map((device, index) => (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{device.device}</span>
-                          <div className="flex items-center space-x-2">
-                            <div className="bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-green-600 h-2 rounded-full"
-                                style={{ width: `${(device.count / urlStats.analytics!.total_clicks) * 100}%` }}
-                              ></div>
-                            </div>
-                            <span className="text-sm font-medium text-gray-900">{device.count}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <AnalyticsOverview analytics={urlStats.analytics} />
             )}
           </div>
 
-          {/* QR Code Section */}
+          {/* QR Code Section and Quick Actions */}
           <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">QR Code</h2>
-              
-              {qrCode ? (
-                <div className="space-y-4">
-                  <div className="flex justify-center">
-                    <div className="p-4 bg-white rounded-lg border border-gray-200">
-                      <img 
-                        src={qrCode} 
-                        alt="QR Code" 
-                        className="w-48 h-48"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={downloadQR}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                    >
-                      Download QR
-                    </button>
-                    <button
-                      onClick={() => copyToClipboard(urlStats?.short_url || '')}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                    >
-                      Salin Link
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-gray-600">Membuat QR Code...</p>
-                </div>
-              )}
-            </div>
+            <QRCodeSection
+              shortUrl={urlStats.short_url}
+              shortCode={urlStats.short_code}
+              onCopy={copyToClipboard}
+            />
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Aksi Cepat</h2>
-              
-              <div className="space-y-3">
-                <button
-                  onClick={() => copyToClipboard(urlStats.short_url)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                >
-                  Salin URL Pendek
-                </button>
-                <button
-                  onClick={() => copyToClipboard(urlStats.original_url)}
-                  className="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md font-medium transition-colors"
-                >
-                  Salin URL Asli
-                </button>
-                <Link
-                  href={urlStats.short_url || '#'}
-                  target="_blank"
-                  className="block w-full bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium text-center transition-colors"
-                >
-                  Buka URL
-                </Link>
-              </div>
-            </div>
+            <QuickActions
+              shortUrl={urlStats.short_url}
+              originalUrl={urlStats.original_url}
+              onCopyShortUrl={() => copyToClipboard(urlStats.short_url)}
+              onCopyOriginalUrl={() => copyToClipboard(urlStats.original_url)}
+            />
           </div>
         </div>
       </div>
+
+      {/* Alerts */}
+      {alerts.map((alert) => (
+        <Alert
+          key={alert.id}
+          type={alert.type}
+          message={alert.message}
+          onClose={() => removeAlert(alert.id)}
+        />
+      ))}
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog
+        show={confirmation.show}
+        title={confirmation.title}
+        message={confirmation.message}
+        confirmText={confirmation.confirmText}
+        cancelText={confirmation.cancelText}
+        type={confirmation.type}
+        onConfirm={confirmation.onConfirm || (() => {})}
+        onCancel={confirmation.onCancel || (() => {})}
+      />
     </div>
   );
 }

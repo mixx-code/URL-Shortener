@@ -12,20 +12,47 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [user, setUser] = useState<{ id: number; name: string; username: string; email: string; created_at: string; updated_at: string } | null>(null);
   
   // Password change form states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // Check authentication on component mount
+  // Fetch user data from API
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    setLoading(false);
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        const response = await fetch('http://localhost:3000/api/profile', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status && data.user) {
+            setUser(data.user);
+          }
+        } else {
+          throw new Error('Failed to fetch profile data');
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+        setError('Failed to load profile data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
   }, [router]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -156,6 +183,83 @@ export default function ProfilePage() {
               {success}
             </div>
           )}
+
+          {/* Profile Info Card */}
+          <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+            <div className="flex items-center mb-6">
+              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Profile Information</h2>
+                <p className="text-sm text-gray-500">Your personal information and account details</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Full Name</label>
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-gray-900 font-medium">{user?.name || 'Loading...'}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Username</label>
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-gray-900 font-medium font-mono">{user?.username || 'Loading...'}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-gray-900 font-medium">{user?.email || 'Loading...'}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">User ID</label>
+                  <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <p className="text-gray-900 font-mono text-sm">#{user?.id || 'Loading...'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Account Created</label>
+                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-gray-900 font-medium">
+                    {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    }) : 'Loading...'}
+                  </p>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Last Updated</label>
+                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-gray-900 font-medium">
+                    {user?.updated_at ? new Date(user.updated_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric'
+                    }) : 'Loading...'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* Change Password Card */}
           <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
@@ -306,7 +410,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Account Info Card */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
+          {/* <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
                 <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,10 +454,10 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Danger Zone */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border-2 border-red-100">
+          {/* <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 border-2 border-red-100">
             <div className="flex items-center mb-6">
               <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-4">
                 <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -401,7 +505,7 @@ export default function ProfilePage() {
                 </button>
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

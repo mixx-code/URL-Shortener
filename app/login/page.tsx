@@ -138,11 +138,6 @@ export default function LoginPage() {
             </p>
           </div>
         </div>
-
-        {/* Bottom text */}
-        <p className="text-center mt-6 text-sm text-gray-500">
-          Dibuat khusus untuk UMKM dan konten kreator Indonesia 🇮🇩
-        </p>
       </div>
     </div>
   );
