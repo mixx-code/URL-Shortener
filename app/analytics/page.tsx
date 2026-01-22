@@ -2,15 +2,39 @@
 
 import { useState, useEffect } from 'react';
 import Header from '../components/Header';
-import { MousePointer, Link, BarChart3, TrendingUp, Activity, Globe, Clock } from 'lucide-react';
+import { MousePointer, Link, BarChart3, TrendingUp, Activity, Globe, Clock, Filter, Calendar, ChevronDown, X } from 'lucide-react';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+  ChartOptions
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 interface AnalyticsData {
   totalClicks: number;
   dailyClicks: Array<{
-    date: string;
     clicks: number;
+    time: string;
   }>;
-  monthlyClicks: Array<{    // ← Di sini
+  monthlyClicks?: Array<{
     month: string;
     clicks: number;
   }>;
@@ -22,7 +46,7 @@ interface AnalyticsData {
     click_count: number;
     created_at: string;
   }>;
-  clickDetails: Array<{
+  clickDetails?: Array<{
     id: number;
     url_id: number;
     ip_address: string;
@@ -32,13 +56,24 @@ interface AnalyticsData {
   }>;
 }
 
+interface AnalyticsFilters {
+  url?: string;
+  start_date?: string;
+  end_date?: string;
+  period?: 'day' | 'week' | 'month' | 'year';
+}
+
 
 export default function AnalyticsPage() {
   const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selectedPeriod, setSelectedPeriod] = useState<'daily' | 'weekly'>('daily');
-  const [selectedUrl, setSelectedUrl] = useState<string>('all'); // Add URL filter state
+  const [filters, setFilters] = useState<AnalyticsFilters>({});
+  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'year'>('month');
+  const [selectedUrl, setSelectedUrl] = useState<string>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
 
 const formatMonth = (monthString: string) => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -56,16 +91,36 @@ const formatMonth = (monthString: string) => {
   }, []);
 
   useEffect(() => {
-    if (selectedUrl !== undefined) {
-      fetchAnalytics(selectedUrl);
-    }
-  }, [selectedUrl]);
+    fetchAnalytics();
+  }, [filters]);
 
-  const fetchAnalytics = async (urlFilter?: string) => {
+  const buildQueryParams = (params: AnalyticsFilters): string => {
+    const queryParams = new URLSearchParams();
+    
+    if (params.url && params.url !== 'all') {
+      queryParams.append('url', params.url);
+    }
+    if (params.start_date) {
+      queryParams.append('start_date', params.start_date);
+    }
+    if (params.end_date) {
+      queryParams.append('end_date', params.end_date);
+    }
+    // Note: period is not sent to API, only used for UI logic
+    
+    return queryParams.toString();
+  };
+
+  const fetchAnalytics = async (customFilters?: AnalyticsFilters) => {
     try {
       setLoading(true);
-      const filterParam = urlFilter && urlFilter !== 'all' ? `?url=${urlFilter}` : '';
-      const response = await fetch(`http://localhost:3000/api/analytics${filterParam}`, {
+      setError('');
+      
+      const currentFilters = customFilters || filters;
+      const queryString = buildQueryParams(currentFilters);
+      const url = queryString ? `http://localhost:3000/api/analytics?${queryString}` : 'http://localhost:3000/api/analytics';
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json',
@@ -77,14 +132,14 @@ const formatMonth = (monthString: string) => {
       }
 
       const data = await response.json();
-      console.log('Analytics API Response:', data); // Debug log
+      console.log('Analytics API Response:', data);
       
       if (data.status && data.data) {
         setAnalyticsData(data.data);
-        console.log('Analytics Data Set:', data.data); // Debug log
+        console.log('Analytics Data Set:', data.data);
       } else {
         setError('Failed to load analytics');
-        console.log('Analytics Error:', data); // Debug log
+        console.log('Analytics Error:', data);
       }
     } catch (err) {
       setError('Failed to load analytics. Please try again.');
@@ -92,6 +147,45 @@ const formatMonth = (monthString: string) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    const newFilters: AnalyticsFilters = {};
+    
+    if (selectedUrl && selectedUrl !== 'all') {
+      newFilters.url = selectedUrl;
+    }
+    
+    // Set date range based on period (period is only for UI logic)
+    if (selectedPeriod === 'week' && startDate) {
+      const end = new Date(startDate);
+      end.setDate(end.getDate() + 7);
+      newFilters.start_date = startDate;
+      newFilters.end_date = end.toISOString().split('T')[0];
+    } else if (selectedPeriod === 'month' && startDate) {
+      const end = new Date(startDate);
+      end.setMonth(end.getMonth() + 1);
+      newFilters.start_date = startDate;
+      newFilters.end_date = end.toISOString().split('T')[0];
+    } else if (selectedPeriod === 'day') {
+      // For daily, no date range needed - just fetch all daily data
+    } else if (selectedPeriod === 'year') {
+      // For yearly, no date range needed - just fetch all yearly data
+    } else if (startDate && endDate) {
+      // Custom date range without period
+      newFilters.start_date = startDate;
+      newFilters.end_date = endDate;
+    }
+    
+    setFilters(newFilters);
+  };
+
+  const resetFilters = () => {
+    setSelectedUrl('all');
+    setStartDate('');
+    setEndDate('');
+    setSelectedPeriod('month');
+    setFilters({});
   };
 
   const formatDate = (dateString: string) => {
@@ -137,35 +231,184 @@ const formatMonth = (monthString: string) => {
           </div>
         )}
 
-        {analyticsData && (
-          <>
-            {/* URL Filter */}
-            {analyticsData && analyticsData.urlStats && (
-              <div className="bg-white rounded-lg shadow p-6 mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Filter Link</h3>
-                  <div className="flex items-center space-x-4">
-                    <label htmlFor="url-filter" className="text-sm font-medium text-gray-700">
-                      Pilih Link:
-                    </label>
-                    <select
-                      id="url-filter"
-                      value={selectedUrl}
-                      onChange={(e) => setSelectedUrl(e.target.value)}
-                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-black"
-                    >
-                      <option value="all">Semua Link</option>
-                      {analyticsData.urlStats.map((url) => (
-                        <option key={url.id} value={url.short_code}>
-                          {url.short_code} - {url.original_url.length > 30 ? url.original_url.substring(0, 30) + '...' : url.original_url}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+        {/* Professional Filter Section */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+          {/* Filter Header */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center justify-center w-10 h-10 bg-blue-50 rounded-lg">
+                  <Filter className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Filter Analytics</h3>
+                  <p className="text-sm text-gray-500">Customize your data view</p>
                 </div>
               </div>
-            )}
+              
+              <div className="flex items-center space-x-3">
+                {/* Active Filters Summary */}
+                {(filters.url || filters.start_date || filters.end_date) && (
+                  <div className="hidden md:flex items-center space-x-2">
+                    <span className="text-sm text-gray-500">Active:</span>
+                    <div className="flex space-x-1">
+                      {filters.url && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          URL: {filters.url}
+                        </span>
+                      )}
+                      {filters.start_date && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {filters.start_date}
+                        </span>
+                      )}
+                      {filters.end_date && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          {filters.end_date}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  <span>{showFilters ? 'Hide' : 'Show'} Filters</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          {/* Expandable Filter Content */}
+          {showFilters && (
+            <div className="px-6 py-6 border-b border-gray-200 bg-gray-50/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* URL Filter */}
+                <div>
+                  <label htmlFor="url-filter" className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Link className="w-4 h-4 inline mr-2 text-gray-400" />
+                    Filter Link
+                  </label>
+                  <select
+                    id="url-filter"
+                    value={selectedUrl}
+                    onChange={(e) => setSelectedUrl(e.target.value)}
+                    className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-gray-900 transition-colors"
+                  >
+                    <option value="all">Semua Link</option>
+                    {analyticsData?.urlStats?.map((url) => (
+                      <option key={url.id} value={url.short_code}>
+                        {url.short_code} - {url.original_url.length > 30 ? url.original_url.substring(0, 30) + '...' : url.original_url}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
+                {/* Period Filter */}
+                <div>
+                  <label htmlFor="period-filter" className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Calendar className="w-4 h-4 inline mr-2 text-gray-400" />
+                    Periode
+                  </label>
+                  <select
+                    id="period-filter"
+                    value={selectedPeriod}
+                    onChange={(e) => setSelectedPeriod(e.target.value as 'week' | 'month')}
+                    className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-gray-900 transition-colors"
+                  >
+                    <option value="week">Mingguan</option>
+                    <option value="month">Bulanan</option>
+                  </select>
+                </div>
+
+                {/* Date Range Filter - Only show for weekly and monthly periods */}
+                {(selectedPeriod === 'week' || selectedPeriod === 'month') && (
+                  <>
+                    <div>
+                      <label htmlFor="start-date" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Tanggal Mulai
+                      </label>
+                      <input
+                        type="date"
+                        id="start-date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white text-gray-900 transition-colors"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="end-date" className="block text-sm font-semibold text-gray-700 mb-2">
+                        Tanggal Selesai
+                      </label>
+                      <input
+                        type="date"
+                        id="end-date"
+                        value={(() => {
+                          if (selectedPeriod === 'week' && startDate) {
+                            const end = new Date(startDate);
+                            end.setDate(end.getDate() + 7);
+                            return end.toISOString().split('T')[0];
+                          } else if (selectedPeriod === 'month' && startDate) {
+                            const end = new Date(startDate);
+                            end.setMonth(end.getMonth() + 1);
+                            return end.toISOString().split('T')[0];
+                          }
+                          return '';
+                        })()}
+                        readOnly
+                        className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm bg-gray-100 text-gray-600 text-sm cursor-not-allowed"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              {/* Helper Text */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  {selectedPeriod === 'week' || selectedPeriod === 'month' 
+                    ? 'Pilih tanggal mulai, tanggal akhir akan dihitung otomatis'
+                    : 'Data akan ditampilkan sesuai periode yang dipilih'
+                  }
+                </p>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="mt-6 flex items-center justify-between">
+                <div className="text-sm text-gray-500">
+                  {Object.keys(filters).length > 0 && (
+                    <span>{Object.keys(filters).length} filter aktif</span>
+                  )}
+                </div>
+                
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={resetFilters}
+                    className="flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-gray-50 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    <span>Reset</span>
+                  </button>
+                  <button
+                    onClick={applyFilters}
+                    className="flex items-center space-x-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+                  >
+                    <Filter className="w-4 h-4" />
+                    <span>Terapkan Filter</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {analyticsData && (
+          <>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white rounded-lg shadow p-6">
@@ -190,7 +433,7 @@ const formatMonth = (monthString: string) => {
                   <div className="ml-5 w-0 flex-1">
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Total Link</dt>
-                      <dd className="text-lg font-medium text-gray-900">{analyticsData.urlStats.length.toLocaleString('id-ID')}</dd>
+                      <dd className="text-lg font-medium text-gray-900">{analyticsData.urlStats?.length?.toLocaleString('id-ID') || 0}</dd>
                     </dl>
                   </div>
                 </div>
@@ -205,7 +448,7 @@ const formatMonth = (monthString: string) => {
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Rata-rata Klik/Link</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {analyticsData.urlStats.length > 0 
+                        {analyticsData.urlStats && analyticsData.urlStats.length > 0 
                           ? Math.round(analyticsData.totalClicks / analyticsData.urlStats.length).toLocaleString('id-ID')
                           : '0'
                         }
@@ -224,173 +467,137 @@ const formatMonth = (monthString: string) => {
                     <dl>
                       <dt className="text-sm font-medium text-gray-500 truncate">Link Aktif</dt>
                       <dd className="text-lg font-medium text-gray-900">
-                        {analyticsData.urlStats.filter(url => url.click_count > 0).length.toLocaleString('id-ID')}
+                        {analyticsData.urlStats?.filter(url => url.click_count > 0)?.length?.toLocaleString('id-ID') || 0}
                       </dd>
                     </dl>
                   </div>
                 </div>
               </div>
             </div>
+
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div className="mb-8">
               {/* Daily Chart */}
               <div className="bg-white rounded-lg shadow p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Grafik Harian</h3>
-                    {analyticsData.dailyClicks.length > 0 && (
+                    <h3 className="text-lg font-semibold text-gray-900">Grafik Klik</h3>
+                    {analyticsData.dailyClicks && analyticsData.dailyClicks.length > 0 && (
                       <p className="text-sm text-gray-500 mt-1">
-                        7 hari terakhir
+                        {analyticsData.dailyClicks.length} hari data
                       </p>
                     )}
                   </div>
                 </div>
                 
-                <div className="h-64 relative">
-                  {analyticsData.dailyClicks.length > 0 ? (
-                    <>
-                      {/* Y-axis labels */}
-                      <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
-                        {(() => {
-                          const maxClicks = Math.max(...analyticsData.dailyClicks.map(d => d.clicks), 1);
-                          return [maxClicks, Math.floor(maxClicks * 0.5), 0].map((val, idx) => (
-                            <div key={idx}>{val}</div>
-                          ));
-                        })()}
-                      </div>
-                      
-                      {/* Chart bars */}
-                      <div className="ml-8 h-full pb-8 flex items-end justify-between gap-2">
-                        {analyticsData.dailyClicks.map((day, index) => {
-                          const maxClicks = Math.max(...analyticsData.dailyClicks.map(d => d.clicks), 1);
-                          const heightPercentage = (day.clicks / maxClicks) * 100;
-                          const date = new Date(day.date);
-                          const dayName = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'][date.getDay()];
-                          
-                          return (
-                            <div key={index} className="flex-1 flex flex-col items-center group">
-                              <div className="w-full relative">
-                                {day.clicks > 0 ? (
-                                  <div
-                                    className="w-full bg-blue-500 hover:bg-blue-600 transition-all rounded-t cursor-pointer relative"
-                                    style={{ 
-                                      height: `${Math.max(heightPercentage, 8)}px`,
-                                      minHeight: '8px'
-                                    }}
-                                  >
-                                    {/* Tooltip */}
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                      {day.clicks} klik
-                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="w-full h-1 bg-gray-200 rounded cursor-pointer">
-                                    {/* Tooltip for zero clicks */}
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                      0 klik
-                                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              {/* X-axis label */}
-                              <div className="text-xs text-gray-600 mt-2 text-center">
-                                {dayName}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
+                <div className="h-64">
+                  {analyticsData.dailyClicks && analyticsData.dailyClicks.length > 0 ? (
+                    <Line
+                      data={{
+                        labels: analyticsData.dailyClicks.map((day) => {
+                          const date = new Date(day.time);
+                          if (analyticsData.dailyClicks.length <= 7) {
+                            return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });
+                          } else {
+                            // Show fewer labels for longer periods
+                            const index = analyticsData.dailyClicks.indexOf(day);
+                            return index % Math.ceil(analyticsData.dailyClicks.length / 7) === 0 
+                              ? date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+                              : '';
+                          }
+                        }),
+                        datasets: [
+                          {
+                            label: 'Jumlah Klik',
+                            data: analyticsData.dailyClicks.map((day) => day.clicks),
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2,
+                          },
+                        ],
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                          mode: 'index',
+                          intersect: false,
+                        },
+                        plugins: {
+                          legend: {
+                            display: false,
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            borderColor: 'rgba(59, 130, 246, 0.5)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: false,
+                            callbacks: {
+                              label: function(context) {
+                                return `${context.parsed.y} klik`;
+                              },
+                              title: function(context) {
+                                const dataIndex = context[0].dataIndex;
+                                const date = new Date(analyticsData.dailyClicks[dataIndex].time);
+                                return date.toLocaleDateString('id-ID', { 
+                                  day: 'numeric', 
+                                  month: 'short', 
+                                  year: 'numeric' 
+                                });
+                              }
+                            }
+                          }
+                        },
+                        scales: {
+                          x: {
+                            grid: {
+                              display: false,
+                            },
+                            ticks: {
+                              font: {
+                                size: 11,
+                              },
+                              color: '#6B7280',
+                            },
+                          },
+                          y: {
+                            beginAtZero: true,
+                            grid: {
+                              color: 'rgba(229, 231, 235, 0.5)',
+                              drawBorder: false,
+                            },
+                            ticks: {
+                              font: {
+                                size: 11,
+                              },
+                              color: '#6B7280',
+                              padding: 8,
+                            },
+                          },
+                        },
+                        elements: {
+                          point: {
+                            hoverRadius: 8,
+                          }
+                        }
+                      } as ChartOptions<'line'>}
+                    />
                   ) : (
                     <div className="h-full flex items-center justify-center text-gray-500">
-                      <p>Belum ada data klik harian</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Weekly Chart */}
-              {/* Monthly Chart */}
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Grafik Bulanan</h3>
-                    {analyticsData.monthlyClicks && analyticsData.monthlyClicks.length > 0 && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        Data tahun berjalan
-                      </p>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="h-64 relative">
-                  {analyticsData.monthlyClicks && analyticsData.monthlyClicks.length > 0 ? (
-                    <>
-                      {/* Y-axis labels */}
-                      <div className="absolute left-0 top-0 bottom-8 flex flex-col justify-between text-xs text-gray-500">
-                        {(() => {
-                          const maxClicks = Math.max(...analyticsData.monthlyClicks.map(m => m.clicks), 1);
-                          return [maxClicks, Math.floor(maxClicks * 0.5), 0].map((val, idx) => (
-                            <div key={idx}>{val}</div>
-                          ));
-                        })()}
-                      </div>
-                      
-                      {/* Chart bars */}
-                      <div className="ml-8 h-full pb-8 flex items-end justify-between gap-1">
-                        {(() => {
-                          // Sort months so January (1) is first, December (12) is last
-                          const sortedMonths = [...analyticsData.monthlyClicks].sort((a, b) => {
-                            return parseInt(a.month) - parseInt(b.month);
-                          });
-                          
-                          const maxClicks = Math.max(...sortedMonths.map(m => m.clicks), 1);
-                          
-                          return sortedMonths.map((month, index) => {
-                            const heightPercentage = (month.clicks / maxClicks) * 100;
-                            
-                            return (
-                              <div key={index} className="flex-1 flex flex-col items-center group">
-                                <div className="w-full relative">
-                                  {month.clicks > 0 ? (
-                                    <div
-                                      className="w-full bg-green-500 hover:bg-green-600 transition-all rounded-t cursor-pointer relative"
-                                      style={{ 
-                                        height: `${Math.max(heightPercentage, 8)}px`,
-                                        minHeight: '8px'
-                                      }}
-                                    >
-                                      {/* Tooltip */}
-                                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                        {formatMonth(month.month)}: {month.clicks} klik
-                                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="w-full h-1 bg-gray-200 rounded cursor-pointer">
-                                      {/* Tooltip for zero clicks */}
-                                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                        {formatMonth(month.month)}: 0 klik
-                                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                                {/* X-axis label */}
-                                <div className="text-xs text-gray-600 mt-2 text-center">
-                                  {formatMonth(month.month)}
-                                </div>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500">
-                      <p>Belum ada data klik bulanan</p>
+                      <p>Belum ada data klik</p>
                     </div>
                   )}
                 </div>
@@ -423,7 +630,7 @@ const formatMonth = (monthString: string) => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {analyticsData.urlStats.map((url) => (
+                    {analyticsData.urlStats?.map((url) => (
                       <tr key={url.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
@@ -490,7 +697,7 @@ const formatMonth = (monthString: string) => {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {analyticsData.clickDetails.slice(0, 50).map((click) => (
+                      {analyticsData.clickDetails?.slice(0, 50)?.map((click) => (
                         <tr key={click.id} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <p className="text-sm text-blue-600 font-medium">
